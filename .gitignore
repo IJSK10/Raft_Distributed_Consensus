@@ -1,0 +1,42 @@
+# --- Build Artifacts ---
+build/
+bin/
+lib/
+cmake-build-debug/
+cmake-build-release/
+compile_commands.json
+
+folder_structure.txt
+
+# --- Executables ---
+raft_server
+raft_client
+*.exe
+*.out
+
+# --- CMake Generated Files (if run outside build/) ---
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# --- Runtime Data (CRITICAL) ---
+# Ignore the RocksDB database and Snapshot files
+data/
+snapshots/
+*.db
+*.log
+
+# --- Dependencies ---
+# If you cloned vcpkg inside the project, ignore it
+vcpkg/
+vcpkg_installed/
+
+# --- IDE/Editor Settings ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

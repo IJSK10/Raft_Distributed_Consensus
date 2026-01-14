@@ -1,0 +1,81 @@
+syntax = "proto3";
+package raft;
+
+import "client.proto"; // We import the client message to store inside the log
+
+// --- SERVICE DEFINITION ---
+service RaftService {
+    rpc RequestVote(RequestVoteArgs) returns (RequestVoteReply);
+    rpc AppendEntries(AppendEntriesArgs) returns (AppendEntriesReply);
+    rpc InstallSnapshot(InstallSnapshotArgs) returns (InstallSnapshotReply);
+}
+
+// --- STORAGE STRUCTURES (Saved to RocksDB) ---
+
+// The basic unit of the Raft Log
+message LogEntry {
+    int32 term = 1;
+    int32 index = 2;
+    client.ClientRequest command = 3; // The actual banking transaction
+}
+
+// The value stored in the "Result Map" (req:{id})
+message CommandResult {
+    string result_message = 1;
+    int32 executed_at_index = 2; 
+}
+
+// --- RPC MESSAGES (Network) ---
+
+// 1. Election
+message RequestVoteArgs {
+    int32 term = 1;
+    int32 candidateId = 2;
+    int32 lastLogIndex = 3;
+    int32 lastLogTerm = 4;
+}
+
+message RequestVoteReply {
+    int32 term = 1;
+    bool voteGranted = 2;
+}
+
+// 2. Replication & Heartbeats
+message AppendEntriesArgs {
+    int32 term = 1;
+    int32 leaderId = 2;
+    
+    int32 prevLogIndex = 3;
+    int32 prevLogTerm = 4;
+    
+    repeated LogEntry entries = 5; // Empty for heartbeats
+    
+    int32 leaderCommit = 6;
+}
+
+message AppendEntriesReply {
+    int32 term = 1;
+    bool success = 2;
+    
+    // Optimization hints for fast catch-up
+    int32 conflictIndex = 3;
+    int32 conflictTerm = 4;
+}
+
+// 3. Snapshots (For lagging followers)
+message InstallSnapshotArgs {
+    int32 term = 1;
+    int32 leaderId = 2;
+    
+    int32 lastIncludedIndex = 3;
+    int32 lastIncludedTerm = 4;
+    
+    bytes data = 5; // The raw content of the snapshot file
+    
+    int64 offset = 6;
+    bool done = 7;
+}
+
+message InstallSnapshotReply {
+    int32 term = 1;
+}

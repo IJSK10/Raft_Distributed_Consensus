@@ -1,0 +1,24 @@
+syntax = "proto3";
+package client;
+
+// A request from the User -> Gateway
+message ClientRequest {
+    string request_id = 1;  // UUID for deduplication
+    
+    enum Type {
+        GET_BALANCE = 0;
+        TRANSFER = 1;
+    }
+    Type type = 2;
+    
+    string sender_id = 3;   // "Account A"
+    string receiver_id = 4; // "Account B" (Ignored for GET)
+    int32 amount = 5;       // (Ignored for GET)
+}
+
+// A response from Gateway -> User
+message ClientResponse {
+    bool success = 1;
+    string result = 2;      // "Transfer Complete" or "Insufficient Funds"
+    int32 leader_hint = 3;  // If I'm not leader, try this node ID (optimization)
+}
