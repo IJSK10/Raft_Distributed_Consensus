@@ -50,6 +50,11 @@ public:
     raft::InstallSnapshotReply handleInstallSnapshot(const raft::InstallSnapshotArgs& args);
     int getCurrentTerm() const { return currentTerm_; }
 
+    //For Debugging
+    std::shared_ptr<RocksDBStore> getStorage() const { return storage_; }
+    int getState() const { return state_; }
+    ClusterConfig getConfig() const { return config_; }
+
 private:
     // --- INTERNAL LOGIC ---
     void runElectionTimer();       // Thread: Checks if leader is dead

@@ -237,8 +237,31 @@ int main() {
                 break;
             }
 
-            // Send GET request using Client 1
-            clients[0]->sendCommand(user_input, 0, "GET");
+            std::cout << "\n--- Cluster Consistency Check for User " << user_input << " ---\n";
+            std::cout << std::left << std::setw(10) << "Node" 
+                      << std::setw(15) << "Role" 
+                      << std::setw(15) << "Balance" 
+                      << "Log Index" << std::endl;
+            std::cout << "--------------------------------------------------------\n";
+
+            for (const auto& node : nodes) {
+                // Determine Role String
+                std::string role_str;
+                int state = node->getState();
+                if (state == 0) role_str = "FOLLOWER";
+                else if (state == 1) role_str = "CANDIDATE";
+                else role_str = "LEADER";
+
+                // Direct DB Read (Thread-safe via RocksDB)
+                int bal = node->getStorage()->getBalance(user_input);
+                int log_idx = node->getStorage()->getLastLogIndex();
+
+                std::cout << std::left << std::setw(10) << node->getConfig().my_id 
+                          << std::setw(15) << role_str 
+                          << std::setw(15) << bal 
+                          << log_idx << std::endl;
+            }
+            std::cout << "--------------------------------------------------------\n";
 
             // Sleep briefly so the async log output appears before the next prompt
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
