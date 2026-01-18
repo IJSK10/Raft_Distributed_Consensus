@@ -1,43 +1,34 @@
 #include "gateway/session.h"
+#include "client.pb.h"
 
-void ClientSession::start() {
-    // 1. Tell the connection to read the next message
-    // We pass a lambda that calls 'onRequestReceived' when data arrives
-    auto self(shared_from_this());
-    
-    connection_->readMessage(
-        [this, self](const std::vector<char>& payload) {
-            onRequestReceived(payload);
-        });
+Session::Session(boost::asio::ip::tcp::socket socket, RaftNode& node)
+    : node_(node) {
+    connection_ = TcpConnection::create(std::move(socket));
 }
 
-void ClientSession::onRequestReceived(const std::vector<char>& payload) {
+void Session::start() {
+    readLoop();
+}
+
+void Session::readLoop() {
     auto self(shared_from_this());
 
-    // 2. Parse the Raw Bytes -> Protobuf Object
-    client::ClientRequest req;
-    if (!req.ParseFromArray(payload.data(), payload.size())) {
-        std::cerr << "[Session] Error: Failed to parse ClientRequest." << std::endl;
-        connection_->close(); // Disconnect invalid clients
-        return;
-    }
-
-    std::cout << "[Session] Received Request ID: " << req.request_id() << std::endl;
-
-    // 3. Define the Callback (What happens when Raft finishes?)
-    // This lambda captures 'self' so the session stays alive while Raft works
-    auto on_raft_complete = [this, self](client::ClientResponse resp) {
+    // Use the framer to get a full message
+    connection_->readMessage([this, self](const std::vector<char>& data) {
         
-        // 4. Send the result back to the client
-        // We use the generic 'send' template we wrote earlier
-        connection_->send(resp);
+        client::ClientRequest req;
+        if (!req.ParseFromArray(data.data(), data.size())) {
+            std::cerr << "Error parsing request." << std::endl;
+            connection_->close();
+            return;
+        }
 
-        // Optional: Loop back to start() if you want to support multiple requests 
-        // per connection (Keep-Alive). For now, let's keep it simple.
-        // start(); 
-    };
-
-    // 5. Hand off to Raft
-    // We assume RaftNode has a method: processClientRequest(req, callback)
-    raft_node_.processClientRequest(req, on_raft_complete);
+        // Pass to Raft Node
+        node_.processClientRequest(req, [this, self](client::ClientResponse resp) {
+            // Send response back using framing
+            connection_->send(resp);
+            // Keep reading for next request
+            readLoop();
+        });
+    });
 }

@@ -43,7 +43,7 @@ public:
     // 2. Saves Request Result (for deduplication)
     // 3. Updates 'lastApplied' index
     // All in one atomic RocksDB batch.
-    void applyTransaction(const raft::LogEntry& entry, int new_balance, std::string result_msg);
+    void applyTransaction(const raft::LogEntry& entry, int sender_new_bal, int receiver_new_bal, std::string result_msg);
 
     // --- 4. IDEMPOTENCY (Duplicate Detection) ---
     // Returns 0 if request not found.

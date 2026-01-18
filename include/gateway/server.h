@@ -3,17 +3,14 @@
 #include <boost/asio.hpp>
 #include "raft/node.h" 
 
-using boost::asio::ip::tcp;
 
 class GatewayServer {
 public:
-    // We need the IO Context (event loop), the Port to listen on, and the Raft Node.
-    GatewayServer(boost::asio::io_context& io_context, short port, RaftNode& raft_node);
+    GatewayServer(boost::asio::io_context& io_context, int port, RaftNode& node);
 
 private:
-    void do_accept();
+    void startAccept();
 
-    tcp::acceptor acceptor_;
-    boost::asio::io_context& io_context_;
-    RaftNode& raft_node_;
+    boost::asio::ip::tcp::acceptor acceptor_;
+    RaftNode& node_;
 };

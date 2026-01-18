@@ -5,13 +5,11 @@
 #include <vector>
 #include <functional>
 #include <iostream>
-#include <cstring> // for memcpy
-// On Windows, you might need winsock2.h, but Boost handles most.
-#include <arpa/inet.h> // for htonl, ntohl on Linux/Mac. Use <winsock2.h> on Windows if needed.
+#include <cstring> 
+#include <arpa/inet.h> // Use <winsock2.h> on Windows
 
 using boost::asio::ip::tcp;
 
-// Shared pointer alias for convenience
 class TcpConnection;
 typedef std::shared_ptr<TcpConnection> TcpConnectionPtr;
 
@@ -61,15 +59,10 @@ public:
             });
     }
 
-    // --- GENERIC READ ---
-    // Reads header -> Reads body -> Calls callback with raw bytes
     void readMessage(std::function<void(const std::vector<char>&)> on_receive);
 
-    void close() {
-        boost::system::error_code ec;
-        socket_.shutdown(tcp::socket::shutdown_both, ec);
-        socket_.close(ec);
-    }
+
+    void close();
 
 private:
     // Private constructors (force use of create())

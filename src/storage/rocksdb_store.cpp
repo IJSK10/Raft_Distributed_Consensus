@@ -1,4 +1,6 @@
 #include "storage/rocksdb_store.h"
+#include "utils/globals.h"
+#include "spdlog/spdlog.h"
 #include <rocksdb/options.h>
 #include <rocksdb/write_batch.h>
 #include <rocksdb/iterator.h>
@@ -20,7 +22,7 @@ RocksDBStore::RocksDBStore(const std::string& db_path) {
     
     rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db_);
     if (!status.ok()) {
-        std::cerr << "CRITICAL: Failed to open RocksDB at " << db_path << std::endl;
+        spdlog::error("CRITICAL: Failed to open RocksDB at {}", db_path);
         exit(1);
     }
 
@@ -32,7 +34,7 @@ RocksDBStore::RocksDBStore(const std::string& db_path) {
         last_log_index_cache_ = 0;
     }
     
-    std::cout << "[Storage] DB Opened. Last Log Index: " << last_log_index_cache_ << std::endl;
+    spdlog::info("[Storage] DB Opened. Last Log Index: {}", last_log_index_cache_);
 }
 
 RocksDBStore::~RocksDBStore() {
@@ -49,15 +51,15 @@ void RocksDBStore::initializeGenesisData() {
         return;
     }
 
-    std::cout << "[Storage] Genesis: Creating 9000 accounts with Balance $100..." << std::endl;
+    spdlog::info("[Storage] Genesis: Creating 9000 accounts with Balance $100000...");
     
     rocksdb::WriteBatch batch;
     for (int i = 1; i <= 9000; ++i) {
-        batch.Put("acct:" + std::to_string(i), "100");
+        batch.Put("acct:" + std::to_string(i), "100000");
     }
     
     db_->Write(rocksdb::WriteOptions(), &batch);
-    std::cout << "[Storage] Genesis Complete." << std::endl;
+    spdlog::info("[Storage] Genesis Complete.");
 }
 
 // --- 2. RAFT HARD STATE ---
@@ -210,14 +212,14 @@ void RocksDBStore::applySnapshot(const std::string& snapshot_data, int last_inde
     
     db_->Write(rocksdb::WriteOptions(), &batch);
     
-    std::cout << "[Storage] Snapshot Applied. State machine restored up to Index " << last_index << std::endl;
+    spdlog::info("[Storage] Snapshot Applied. State machine restored up to Index {}", last_index);
 }
 
 // C. Compact Log: Deletes OLD logs [0 ... compact_index]
 void RocksDBStore::compactLog(int compact_index) {
     std::lock_guard<std::mutex> lock(db_mutex_);
     
-    std::cout << "[Storage] Compacting Log up to index " << compact_index << "..." << std::endl;
+    spdlog::info("[Storage] Compacting Log up to index {}...", compact_index);
     
     for (int i = 0; i <= compact_index; ++i) {
         db_->Delete(rocksdb::WriteOptions(), formatLogKey(i));
@@ -257,16 +259,18 @@ std::string RocksDBStore::getRequestResult(const std::string& request_id) {
     return "";
 }
 
-void RocksDBStore::applyTransaction(const raft::LogEntry& entry, int new_balance, std::string result_msg) {
+void RocksDBStore::applyTransaction(const raft::LogEntry& entry,  int sender_new_bal, int receiver_new_bal, std::string result_msg) {
     std::lock_guard<std::mutex> lock(db_mutex_);
     rocksdb::WriteBatch batch;
+
+    const auto& cmd = entry.command();
     
-    // 1. Update Balance
-    if (entry.command().type() == client::ClientRequest::TRANSFER) {
-        batch.Put("acct:" + entry.command().sender_id(), std::to_string(new_balance));
-        // Note: Receiver logic handled in executor, this is just atomic write wrapper
-    } 
-    // Simplified: Just writing one balance for now. In real executor, you calculate all affected keys.
+    if (sender_new_bal >= 0) {
+        batch.Put("acct:" + cmd.sender_id(), std::to_string(sender_new_bal));
+    }
+    if (receiver_new_bal >= 0) {
+        batch.Put("acct:" + cmd.receiver_id(), std::to_string(receiver_new_bal));
+    }
 
     // 2. Save Result (Idempotency)
     raft::CommandResult res;

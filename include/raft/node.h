@@ -14,6 +14,7 @@
 #include "rpc/client.h"
 #include "client.pb.h"
 #include "raft.pb.h"
+#include <grpcpp/grpcpp.h>
 
 // Configuration for the node
 struct ClusterConfig {
@@ -25,6 +26,8 @@ struct ClusterConfig {
     // e.g., { {2, "127.0.0.1:50052"}, {3, "127.0.0.1:50053"} }
     std::vector<std::pair<int, std::string>> peers;
 };
+
+class RaftServiceImpl;
 
 class RaftNode {
 public:
@@ -45,6 +48,7 @@ public:
     raft::RequestVoteReply handleRequestVote(const raft::RequestVoteArgs& args);
     raft::AppendEntriesReply handleAppendEntries(const raft::AppendEntriesArgs& args);
     raft::InstallSnapshotReply handleInstallSnapshot(const raft::InstallSnapshotArgs& args);
+    int getCurrentTerm() const { return currentTerm_; }
 
 private:
     // --- INTERNAL LOGIC ---
@@ -56,6 +60,8 @@ private:
     void becomeFollower(int term);
     void becomeLeader();
 
+    void replicateToPeer(int peerId);
+
     // --- STATE ---
     std::mutex mutex_; // Protects ALL state below
     ClusterConfig config_;
@@ -63,6 +69,12 @@ private:
 
     // Network Stubs (Peer ID -> Client Wrapper)
     std::map<int, std::unique_ptr<PeerClient>> peer_stubs_;
+
+    // --- RAFT STATE (Loaded from Storage on boot) ---
+    int currentTerm_ = 0;   
+    int votedFor_ = -1;     
+    int lastLogIndex_ = 0;  
+    int lastLogTerm_ = 0;
     
     // Volatile State
     enum Role { FOLLOWER, CANDIDATE, LEADER };
@@ -88,4 +100,18 @@ private:
     
     // Condition Variable to wake up the Executor thread
     std::condition_variable commit_cv_;
+
+
+    // --- RPC SERVER MANAGEMENT ---
+    std::unique_ptr<RaftServiceImpl> rpc_service_; // The "Ears"
+    std::unique_ptr<grpc::Server> rpc_server_;     // The gRPC Engine
+    std::thread rpc_server_thread_;                // The thread it runs on
+
+    std::thread election_thread_;
+    std::thread replication_thread_;
+    std::thread execution_thread_;
+    
+    // Helper to launch the server
+    void startRpcServer();
+    void stopRpcServer();
 };

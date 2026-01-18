@@ -2,10 +2,18 @@
 
 INSTALLATION
 
-~/vcpkg/vcpkg install protobuf:x64-linux grpc:x64-linux rocksdb:x64-linux boost-asio:x64-linux boost-system:x64-linux
+~/vcpkg/vcpkg install nlohmann-json grpc protobuf rocksdb boost-system boost-asio:x64-linuxboost-system:x64-linux
 
-Commands to Run
+or
 
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-linux
+~/vcpkg/vcpkg install
+
+Commands to BUILD
+
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
 cmake --build build
+
+COMMANDS TO RUN
+
+./build/raft_kv

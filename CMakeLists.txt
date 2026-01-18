@@ -1,128 +1,94 @@
 cmake_minimum_required(VERSION 3.15)
-project(RaftBanking)
+project(RaftKV VERSION 1.0)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# -----------------------------------------------------------------------------
-# 1. FIND DEPENDENCIES (via vcpkg)
-# -----------------------------------------------------------------------------
-find_package(Protobuf REQUIRED)
+# --- 1. FIND DEPENDENCIES (Vcpkg Style) ---
+# We use 'CONFIG' to tell CMake to look for the vcpkg-provided config files
+# rather than just searching raw paths.
+
+find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(RocksDB CONFIG REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system) # Asio relies on system
+find_package(nlohmann_json CONFIG REQUIRED) 
+find_package(Boost REQUIRED COMPONENTS system) 
 find_package(Threads REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
-message(STATUS "Found Protobuf: ${Protobuf_VERSION}")
-message(STATUS "Found gRPC: ${gRPC_VERSION}")
-message(STATUS "Found RocksDB: ${RocksDB_VERSION}")
+# --- 2. GENERATE PROTOS ---
+set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/protos")
+set(PROTO_BINARY_DIR "${CMAKE_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY ${PROTO_BINARY_DIR})
 
-# -----------------------------------------------------------------------------
-# 2. PROTOBUF & GRPC GENERATION
-# -----------------------------------------------------------------------------
-# Define where .proto files live
-set(PROTO_DIR ${CMAKE_SOURCE_DIR}/proto)
-file(GLOB PROTO_FILES "${PROTO_DIR}/*.proto")
+# In Vcpkg, Protobuf targets are named slightly differently sometimes,
+# but usually 'protobuf::protoc' is standard.
+if(TARGET protobuf::protoc)
+    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
+else()
+    set(_PROTOBUF_PROTOC ${PROTOBUF_PROTOC_EXECUTABLE})
+endif()
 
-# Helper to find the gRPC C++ plugin
-get_target_property(grpc_cpp_plugin gRPC::grpc_cpp_plugin LOCATION)
+# Same for gRPC plugin
+if(TARGET gRPC::grpc_cpp_plugin)
+    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+else()
+    set(_GRPC_CPP_PLUGIN_EXECUTABLE ${GRPC_CPP_PLUGIN_EXECUTABLE})
+endif()
 
-# A. Generate Standard Protobuf Sources (.pb.cc / .pb.h)
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
-
-# B. Generate gRPC Service Sources (.grpc.pb.cc / .grpc.pb.h)
-# Only raft.proto needs gRPC services, but running on all doesn't hurt
-set(GRPC_SRCS "")
-set(GRPC_HDRS "")
-foreach(FIL ${PROTO_FILES})
-    get_filename_component(ABS_FIL ${FIL} ABSOLUTE)
-    get_filename_component(FIL_WE ${FIL} NAME_WE)
-    
-    list(APPEND GRPC_SRCS "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.grpc.pb.cc")
-    list(APPEND GRPC_HDRS "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.grpc.pb.h")
-    
-    add_custom_command(
-        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.grpc.pb.cc"
-               "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.grpc.pb.h"
-        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
-        ARGS --grpc_out=${CMAKE_CURRENT_BINARY_DIR}
-             --cpp_out=${CMAKE_CURRENT_BINARY_DIR}
-             --plugin=protoc-gen-grpc=${grpc_cpp_plugin}
-             -I ${PROTO_DIR}
-             ${ABS_FIL}
-        DEPENDS ${ABS_FIL} ${Protobuf_PROTOC_EXECUTABLE} ${grpc_cpp_plugin}
-    )
-endforeach()
-
-# -----------------------------------------------------------------------------
-# 3. INCLUDE DIRECTORIES
-# -----------------------------------------------------------------------------
-include_directories(
-    ${CMAKE_SOURCE_DIR}/include        # Your manual headers
-    ${CMAKE_CURRENT_BINARY_DIR}        # Generated Proto headers
-    ${Protobuf_INCLUDE_DIRS}
-    ${RocksDB_INCLUDE_DIRS}
+add_custom_command(
+    OUTPUT "${PROTO_BINARY_DIR}/raft.pb.cc" "${PROTO_BINARY_DIR}/raft.pb.h"
+           "${PROTO_BINARY_DIR}/raft.grpc.pb.cc" "${PROTO_BINARY_DIR}/raft.grpc.pb.h"
+           "${PROTO_BINARY_DIR}/client.pb.cc" "${PROTO_BINARY_DIR}/client.pb.h"
+    COMMAND ${_PROTOBUF_PROTOC}
+    ARGS --grpc_out="${PROTO_BINARY_DIR}" --cpp_out="${PROTO_BINARY_DIR}"
+         --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+         -I "${PROTO_SRC_DIR}"
+         "${PROTO_SRC_DIR}/raft.proto" "${PROTO_SRC_DIR}/client.proto"
+    DEPENDS "${PROTO_SRC_DIR}/raft.proto" "${PROTO_SRC_DIR}/client.proto"
 )
 
-# -----------------------------------------------------------------------------
-# 4. SHARED NETWORK LIBRARY (TCP Logic)
-# -----------------------------------------------------------------------------
-# This lib contains the shared TCP framing logic and the generated Proto objects.
-# Both Client and Server link to this.
-add_library(network_lib
-    src/network/connection.cpp
-    ${PROTO_SRCS}
-    ${PROTO_HDRS}
-    ${GRPC_SRCS}
-    ${GRPC_HDRS}
-)
-
-target_link_libraries(network_lib
-    PUBLIC
-    Boost::system
-    protobuf::libprotobuf
-    gRPC::grpc++
-)
-
-# -----------------------------------------------------------------------------
-# 5. EXECUTABLE: RAFT SERVER
-# -----------------------------------------------------------------------------
-add_executable(raft_server
-    src/main.cpp
-    
-    # Raft Modules
+# --- 3. DEFINE SOURCES ---
+set(RAFT_SOURCES
     src/raft/node.cpp
-    src/raft/request_handler.cpp
     src/raft/election.cpp
     src/raft/replication.cpp
-    src/raft/executor.cpp
-    
-    # Gateway Modules
-    src/gateway/server.cpp
-    src/gateway/session.cpp
-    
-    # Storage & RPC
-    src/storage/rocksdb_store.cpp
+    src/raft/execution.cpp
+    src/raft/request_handler.cpp
     src/rpc/grpc_service.cpp
     src/rpc/peer_client.cpp
+    src/storage/rocksdb_store.cpp
+    src/network/connection.cpp
+    src/gateway/server.cpp
+    src/gateway/session.cpp
+    src/client/raft_client.cpp
+    src/benchmark/benchmark.cpp
+
+    src/utils/globals.cpp
+
+    "${PROTO_BINARY_DIR}/raft.pb.cc"
+    "${PROTO_BINARY_DIR}/raft.grpc.pb.cc"
+    "${PROTO_BINARY_DIR}/client.pb.cc"
 )
 
-target_link_libraries(raft_server
-    PRIVATE
-    network_lib           # Use shared TCP/Proto code
-    RocksDB::rocksdb
+# --- 4. EXECUTABLE ---
+add_executable(raft_kv
+    src/main.cpp
+    ${RAFT_SOURCES}
+)
+
+# --- 5. INCLUDES ---
+target_include_directories(raft_kv PUBLIC
+    include
+    "${PROTO_BINARY_DIR}"
+)
+
+# --- 6. LINKING (Vcpkg Target Names) ---
+target_link_libraries(raft_kv PUBLIC
+    protobuf::libprotobuf   # Vcpkg standard name
+    gRPC::grpc++            # Vcpkg standard name
+    RocksDB::rocksdb        # Vcpkg standard name
+    nlohmann_json::nlohmann_json
+    Boost::system
     Threads::Threads
-)
-
-# -----------------------------------------------------------------------------
-# 6. EXECUTABLE: CLIENT CLI
-# -----------------------------------------------------------------------------
-add_executable(raft_client
-    src/client/main.cpp
-)
-
-target_link_libraries(raft_client
-    PRIVATE
-    network_lib           # Use shared TCP/Proto code
-    Threads::Threads
+    spdlog::spdlog
 )

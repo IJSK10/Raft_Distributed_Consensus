@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    { "id": 1, "rpc_port": 50051, "tcp_port": 8081 },
+    { "id": 2, "rpc_port": 50052, "tcp_port": 8082 },
+    { "id": 3, "rpc_port": 50053, "tcp_port": 8083 },
+    { "id": 4, "rpc_port": 50054, "tcp_port": 8084 },
+    { "id": 5, "rpc_port": 50055, "tcp_port": 8085 }
+  ]
+}

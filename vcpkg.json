@@ -1,0 +1,13 @@
+{
+  "name": "raft-kv",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "grpc",
+    "protobuf",
+    "rocksdb",
+    "boost-system",
+    "boost-asio",
+    "nlohmann-json",
+    "spdlog"
+  ]
+}

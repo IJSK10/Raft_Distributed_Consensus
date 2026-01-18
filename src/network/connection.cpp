@@ -44,3 +44,9 @@ void TcpConnection::readMessage(std::function<void(const std::vector<char>&)> on
                 });
         });
 }
+
+void TcpConnection::close() {
+    boost::system::error_code ec;
+    socket_.shutdown(tcp::socket::shutdown_both, ec);
+    socket_.close(ec);
+}
