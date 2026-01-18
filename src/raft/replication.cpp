@@ -198,8 +198,10 @@ raft::AppendEntriesReply RaftNode::handleAppendEntries(const raft::AppendEntries
     // 3. Log Consistency
     if (args.prevlogindex() > 0) {
         if (args.prevlogindex() > lastLogIndex_) {
-            spdlog::warn("[Replication] Rejecting: Leader PrevLogIndex {} > My LastLogIndex {}", 
-                args.prevlogindex(), lastLogIndex_);
+            if (DevFlags::LOG_REPLICATION) {
+                spdlog::warn("[Replication] Rejecting: Leader PrevLogIndex {} > My LastLogIndex {}", 
+                    args.prevlogindex(), lastLogIndex_);
+            }
             reply.set_term(currentTerm_);
             reply.set_success(false);
             return reply;
@@ -218,8 +220,10 @@ raft::AppendEntriesReply RaftNode::handleAppendEntries(const raft::AppendEntries
         // -------------------------------------
 
         if (myTerm != args.prevlogterm()) {
-            spdlog::warn("[Replication] Rejecting: Index {} Term Mismatch. Mine: {} Leader: {}", 
-                args.prevlogindex(), myTerm, args.prevlogterm());
+            if (DevFlags::LOG_REPLICATION) {
+                spdlog::warn("[Replication] Rejecting: Index {} Term Mismatch. Mine: {} Leader: {}", 
+                    args.prevlogindex(), myTerm, args.prevlogterm());
+            }
             reply.set_term(currentTerm_);
             reply.set_success(false);
             return reply;
