@@ -2,7 +2,7 @@
 
 **A high-performance, fault-tolerant distributed key-value store built from scratch in C++ using the Raft Consensus Algorithm.**
 
-![Language](https://img.shields.io/badge/Language-C%2B%2B17-orange) ![Communication](https://img.shields.io/badge/RPC-gRPC%2FProtobuf-green) ![Storage](https://img.shields.io/badge/Storage-RocksDB-red) ![Architecture](https://img.shields.io/badge/Architecture-Distributed-blue)
+![Language](https://img.shields.io/badge/Language-C%2B%2B17-orange) ![Communication](https://img.shields.io/badge/RPC-gRPC%2FProtobuf-green) ![Networking](https://img.shields.io/badge/Networking-Boost.Asio-yellow) ![Storage](https://img.shields.io/badge/Storage-RocksDB-red) ![Architecture](https://img.shields.io/badge/Architecture-Distributed-blue)
 
 ## 🚀 Overview
 
