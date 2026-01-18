@@ -76,6 +76,30 @@ void RaftNode::runStateMachineExecutor() {
                     pending_callbacks_.erase(it);
                 }
             }
+
+            if (lastApplied_ % 100 == 0) {
+                
+                // SAFETY BUFFER: Keep the last 10 logs on disk.
+                // This allows followers who are slightly behind to catch up 
+                // without needing a full snapshot transfer.
+                int compact_index = lastApplied_ - 50;
+
+                if (compact_index > 0) {
+                    if (DevFlags::LOG_SNAPSHOT) {
+                    spdlog::info("[Snapshot] Taking snapshot. Compacting logs up to Index {} (Current Head: {})...", 
+                        compact_index, lastApplied_);
+                    }
+                    
+                    // A. Create Snapshot (In RocksDB, state is already saved)
+                    
+                    // B. Compact Logs (Delete Log entries 0 to compact_index)
+                    storage_->compactLog(compact_index);
+                    
+                    if (DevFlags::LOG_EXECUTION) {
+                        spdlog::info("[Snapshot] Logs compacted successfully.");
+                    }
+                }
+            }
         }
     }
 }

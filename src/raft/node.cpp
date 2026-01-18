@@ -26,7 +26,7 @@ RaftNode::RaftNode(ClusterConfig config, std::shared_ptr<RocksDBStore> storage)
     state_ = FOLLOWER;
     leaderId_ = -1;
     commitIndex_ = 0;
-    lastApplied_ = 0; // In a future version, you could load this from disk too
+    lastApplied_ = storage_->getLastAppliedIndex();
     
     // 3. Setup Networking
     for (const auto& peer : config.peers) {

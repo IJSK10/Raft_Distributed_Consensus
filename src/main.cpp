@@ -62,6 +62,44 @@ void setupLogging() {
     spdlog::set_pattern("[%H:%M:%S.%e] %^[%l]%$ %v"); 
 }
 
+// --- VERIFICATION HELPER ---
+// This function is now called automatically after tests/benchmarks
+void enterVerificationMode() {
+    std::string user_input;
+    spdlog::info("Entering Verification Mode. Type 'exit' to return to main menu.");
+    
+    while (true) {
+        std::cout << "\n[Verify] Enter User ID to check (or 'exit'): ";
+        std::cin >> user_input;
+        if (user_input == "exit") break;
+
+        std::cout << "\n--- Cluster Consistency Check for User " << user_input << " ---\n";
+        std::cout << std::left << std::setw(10) << "Node" 
+                  << std::setw(15) << "Role" 
+                  << std::setw(15) << "Balance" 
+                  << "Log Index" << std::endl;
+        std::cout << "--------------------------------------------------------\n";
+
+        // Iterating over global nodes to check internal state directly
+        for (const auto& node : nodes) {
+            std::string role_str;
+            int state = node->getState();
+            if (state == 0) role_str = "FOLLOWER";
+            else if (state == 1) role_str = "CANDIDATE";
+            else role_str = "LEADER";
+
+            int bal = node->getStorage()->getBalance(user_input);
+            int log_idx = node->getStorage()->getLastLogIndex();
+
+            std::cout << std::left << std::setw(10) << node->getConfig().my_id 
+                      << std::setw(15) << role_str 
+                      << std::setw(15) << bal 
+                      << log_idx << std::endl;
+        }
+        std::cout << "--------------------------------------------------------\n";
+    }
+}
+
 void runCsvMode(const std::string& filename) {
     spdlog::info("--- STARTING CSV EXECUTION ---");
 
@@ -110,6 +148,76 @@ void runCsvMode(const std::string& filename) {
     // Allow time for last async requests to finish
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
+
+// --- MODE 3: FAULT TOLERANCE / SNAPSHOT TEST ---
+void runSnapshotTest(const std::string& filename) {
+    spdlog::info("============================================");
+    spdlog::info("   STARTING EXTENDED FAULT TOLERANCE TEST   ");
+    spdlog::info("============================================");
+    spdlog::info("Plan: 0-300 (Normal) -> Stop Node 5 -> 300-600 (Offline) -> Start Node 5 -> 600-900 (Recovery)");
+
+    int total_commands_sent = 0;
+    int target_commands = 900; 
+    
+    spdlog::info("[Test] Starting Phase 1: Normal Operation (All Nodes Up)...");
+
+    while (total_commands_sent < target_commands) {
+        std::ifstream file(filename);
+        std::string line;
+        
+        while (std::getline(file, line) && total_commands_sent < target_commands) {
+            if (line.empty()) continue;
+            std::stringstream ss(line);
+            std::string cmd, arg1, arg2, arg3;
+            std::getline(ss, cmd, ',');
+            std::getline(ss, arg1, ','); 
+            std::getline(ss, arg2, ','); 
+            std::getline(ss, arg3, ',');
+
+            // Use only clients 1-4 to avoid timeouts if Client 5 is connected to the stopped node
+            auto& client = clients[total_commands_sent % 4]; 
+
+            if (cmd == "TRANSFER") {
+                 client->sendCommand(arg2, std::stoi(arg3), "TRANSFER", arg1);
+            } else {
+                 client->sendCommand(arg1, 0, "GET");
+            }
+            
+            total_commands_sent++;
+            
+            // Progress Log
+            if (total_commands_sent % 50 == 0) {
+                spdlog::info("[Test] Progress: {}/{}", total_commands_sent, target_commands);
+            }
+            
+            // Rate limit
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+            // --- PHASE 2: STOP NODE 5 ---
+            if (total_commands_sent == 300) {
+                spdlog::warn("\n[Test] >>> PHASE 2: STOPPING NODE 5 <<<");
+                spdlog::warn("[Test] Node 5 will now miss the next 300 logs.");
+                nodes[4]->stop(); // Index 4 is Node 5
+            }
+
+            // --- PHASE 3: RESTART NODE 5 ---
+            if (total_commands_sent == 600) {
+                spdlog::warn("\n[Test] >>> PHASE 3: RESTARTING NODE 5 <<<");
+                spdlog::warn("[Test] Node 5 is booting up. It should detect it's behind and request a Snapshot.");
+                nodes[4]->start();
+            }
+        }
+        file.close();
+    }
+
+    spdlog::info("[Test] Workload finished. Waiting 5s for final consistency...");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    
+    // Automatically verify
+    enterVerificationMode();
+}
+
+
 
 // --- MAIN SIMULATION ---
 int main() {
@@ -187,84 +295,44 @@ int main() {
         clients.push_back(std::make_unique<RaftClient>(i + 1, tcp_peers));
     }
 
-    // 3. RUN SIMULATION SCENARIO
-    std::cout << "\n--- STARTING COMMAND SIMULATION ---\n";
+    while (true) {
+        std::cout << "\n================================\n";
+        std::cout << "1. Run CSV Workload\n";
+        std::cout << "2. Run Benchmark\n";
+        std::cout << "3. Run Fault Tolerance Test\n";
+        std::cout << "4. Exit\n";
+        std::cout << "Select Option: ";
+        
+        int choice;
+        std::cin >> choice;
 
-    // Scenario: 
-    // Random clients sending Transfer and Get commands.
-    // We send 10 commands in quick succession.
-    
-    // 4. SELECTION LOGIC
-    std::cout << "\n================================\n";
-    std::cout << "Select Operation Mode:\n";
-    std::cout << "1. Run CSV Workload (Verification)\n";
-    std::cout << "2. Run Benchmark (Performance)\n";
-    std::cout << "Select [1 or 2]: ";
-    
-    int choice;
-    std::cin >> choice;
-
-    if (choice == 2) {
-        // --- BENCHMARK MODE ---
-        DevFlags::LOG_CLIENT = false;      // Silence logs for speed
-        DevFlags::LOG_EXECUTION = false;   // Silence logs for speed
-
-        int count;
-        double ratio;
-        std::cout << "Enter number of requests (e.g., 10000): ";
-        std::cin >> count;
-        std::cout << "Enter Read Ratio (0.0 to 1.0, e.g., 0.5): ";
-        std::cin >> ratio;
-
-        Benchmark bench(clients);
-        bench.run(count, ratio);
-
-        // Benchmark finished -> Exit immediately
-        spdlog::info("Benchmark Complete. Shutting down.");
-    } 
-    else {
-        // --- CSV / VERIFICATION MODE ---
-        // 1. Run the file exactly once
-        runCsvMode("config/workload.csv");
-
-        // 2. Loop for manual verification
-        std::string user_input;
-        while (true) {
-            std::cout << "\n[Verify] Enter User ID to check Balance (or 'exit'): ";
-            std::cin >> user_input;
+        if (choice == 1) {
+            runCsvMode("config/workload.csv");
+            enterVerificationMode();
+        } 
+        else if (choice == 2) {
+            DevFlags::LOG_CLIENT = false; 
+            DevFlags::LOG_EXECUTION = false; 
+            int count; double ratio;
+            std::cout << "Requests: "; std::cin >> count;
+            std::cout << "Read Ratio: "; std::cin >> ratio;
             
-            if (user_input == "exit") {
-                break;
-            }
+            Benchmark bench(clients);
+            bench.run(count, ratio);
+            
+            DevFlags::LOG_CLIENT = true; 
+            DevFlags::LOG_EXECUTION = true;
+            
+            // Automatically verify after benchmark
+            enterVerificationMode();
+        }
+        else if (choice == 3) {
+            DevFlags::LOG_REPLICATION = false; 
+            runSnapshotTest("config/test.csv");
 
-            std::cout << "\n--- Cluster Consistency Check for User " << user_input << " ---\n";
-            std::cout << std::left << std::setw(10) << "Node" 
-                      << std::setw(15) << "Role" 
-                      << std::setw(15) << "Balance" 
-                      << "Log Index" << std::endl;
-            std::cout << "--------------------------------------------------------\n";
-
-            for (const auto& node : nodes) {
-                // Determine Role String
-                std::string role_str;
-                int state = node->getState();
-                if (state == 0) role_str = "FOLLOWER";
-                else if (state == 1) role_str = "CANDIDATE";
-                else role_str = "LEADER";
-
-                // Direct DB Read (Thread-safe via RocksDB)
-                int bal = node->getStorage()->getBalance(user_input);
-                int log_idx = node->getStorage()->getLastLogIndex();
-
-                std::cout << std::left << std::setw(10) << node->getConfig().my_id 
-                          << std::setw(15) << role_str 
-                          << std::setw(15) << bal 
-                          << log_idx << std::endl;
-            }
-            std::cout << "--------------------------------------------------------\n";
-
-            // Sleep briefly so the async log output appears before the next prompt
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        }
+        else if (choice == 4) {
+            break; 
         }
     }
 

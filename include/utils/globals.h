@@ -7,4 +7,5 @@ struct DevFlags {
     static bool LOG_EXECUTION;   // Applying to State Machine (Money transfers)
     static bool LOG_NETWORK;     // Raw bytes, connection errors
     static bool LOG_CLIENT;      // Client retries and responses
+    static bool LOG_SNAPSHOT;    // Snapshot creation and installation
 };

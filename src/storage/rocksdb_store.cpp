@@ -155,10 +155,10 @@ RocksDBStore::SnapshotData RocksDBStore::createSnapshot() {
     std::lock_guard<std::mutex> lock(db_mutex_);
     
     SnapshotData snap;
-    snap.last_index = last_log_index_cache_; // Assuming we snapshot up to HEAD
+    snap.last_index = getLastAppliedIndex();
     
     // Get last term from log, or from metadata if log was compacted
-    raft::LogEntry lastEntry = getLogEntry(last_log_index_cache_);
+    raft::LogEntry lastEntry = getLogEntry(snap.last_index);
     snap.last_term = lastEntry.term();
 
     // We use a simple text format: "KEY\nVALUE\nKEY\nVALUE..."

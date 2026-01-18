@@ -6,6 +6,7 @@
 #include <random>
 #include <chrono>
 #include <arpa/inet.h> 
+#include <sys/socket.h>
 
 using boost::asio::ip::tcp;
 
@@ -57,6 +58,13 @@ void RaftClient::runCommand(client::ClientRequest req, ResultCallback callback) 
             
             // Connect
             boost::asio::connect(socket, resolver.resolve("127.0.0.1", std::to_string(target_port)));
+
+            // Configure Socket Timeout (2 seconds)
+            struct timeval tv;
+            tv.tv_sec = 2;
+            tv.tv_usec = 0;
+            setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            setsockopt(socket.native_handle(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
             // Send (Framing: 4-byte length header + Protobuf payload)
             std::string payload;

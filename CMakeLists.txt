@@ -54,6 +54,7 @@ set(RAFT_SOURCES
     src/raft/replication.cpp
     src/raft/execution.cpp
     src/raft/request_handler.cpp
+    src/raft/snapshot.cpp
     src/rpc/grpc_service.cpp
     src/rpc/peer_client.cpp
     src/storage/rocksdb_store.cpp

@@ -18,6 +18,6 @@ grpc::Status RaftServiceImpl::AppendEntries(grpc::ServerContext* context,
 grpc::Status RaftServiceImpl::InstallSnapshot(grpc::ServerContext* context, 
                                               const raft::InstallSnapshotArgs* request, 
                                               raft::InstallSnapshotReply* reply) {
-    reply->set_term(node_.getCurrentTerm());
+    *reply = node_.handleInstallSnapshot(*request);
     return grpc::Status::OK;
 }

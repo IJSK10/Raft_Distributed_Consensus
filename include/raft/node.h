@@ -66,6 +66,7 @@ private:
     void becomeLeader();
 
     void replicateToPeer(int peerId);
+    void sendSnapshot(int peerId);
 
     // --- STATE ---
     std::mutex mutex_; // Protects ALL state below
@@ -106,6 +107,8 @@ private:
     // Condition Variable to wake up the Executor thread
     std::condition_variable commit_cv_;
 
+    // Tracks if a replication thread is currently active for a specific peer
+    std::map<int, bool> replication_active_;
 
     // --- RPC SERVER MANAGEMENT ---
     std::unique_ptr<RaftServiceImpl> rpc_service_; // The "Ears"

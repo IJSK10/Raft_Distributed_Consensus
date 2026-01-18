@@ -22,8 +22,25 @@ void RaftNode::runReplicationManager() {
         // Step 2: Spawn parallel tasks
         // Each thread manages its own locking and disk I/O independently.
         for (int peerId : target_peers) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (replication_active_[peerId]) {
+                    continue; // Skip this peer, previous thread is still working
+                }
+                replication_active_[peerId] = true; // Mark as busy
+            }
+
             std::thread([this, peerId]() {
+                
+                // Do the work (Snapshot or AppendEntries)
                 this->replicateToPeer(peerId);
+
+                // C. MARK AS DONE
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    replication_active_[peerId] = false;
+                }
+                
             }).detach();
         }
     }
@@ -34,6 +51,25 @@ void RaftNode::replicateToPeer(int peerId) {
     // PHASE 1: SNAPSHOT STATE (Short Lock)
     // We only lock to grab the numbers we need.
     int nextIdx;
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (state_ != LEADER) return;
+        nextIdx = nextIndex_[peerId];
+    }
+
+    int prevLogIndex = nextIdx - 1;
+    if (prevLogIndex > 0) {
+        // RocksDBStore returns term 0 if the log is missing/compacted
+        if (storage_->getLogEntry(prevLogIndex).term() == 0) {
+            spdlog::info("[Replication] Peer {} is too far behind (Next: {}, My Low: {}). Sending Snapshot...", 
+                peerId, nextIdx, storage_->getLastLogIndex());
+            
+            sendSnapshot(peerId);
+            return; // Done for this cycle
+        }
+    }
+
     int current_term_snapshot;
     int commit_index_snapshot;
     int my_id;
@@ -53,7 +89,6 @@ void RaftNode::replicateToPeer(int peerId) {
     // We read RocksDB here. Since we don't hold the main mutex,
     // the Leader can still process client requests in parallel.
     
-    int prevLogIndex = nextIdx - 1;
     int prevLogTerm = 0;
     if (prevLogIndex > 0) {
         prevLogTerm = storage_->getLogEntry(prevLogIndex).term();
@@ -163,13 +198,28 @@ raft::AppendEntriesReply RaftNode::handleAppendEntries(const raft::AppendEntries
     // 3. Log Consistency
     if (args.prevlogindex() > 0) {
         if (args.prevlogindex() > lastLogIndex_) {
+            spdlog::warn("[Replication] Rejecting: Leader PrevLogIndex {} > My LastLogIndex {}", 
+                args.prevlogindex(), lastLogIndex_);
             reply.set_term(currentTerm_);
             reply.set_success(false);
             return reply;
         }
 
-        int myTerm = storage_->getLogEntry(args.prevlogindex()).term();
+        int myTerm;
+        
+        // If the leader is asking about our exact Last Log, use our RAM state.
+        // This is crucial immediately after a snapshot, where the log might not exist on disk yet.
+        if (args.prevlogindex() == lastLogIndex_) {
+            myTerm = lastLogTerm_; 
+        } else {
+            // Otherwise, read from disk
+            myTerm = storage_->getLogEntry(args.prevlogindex()).term();
+        }
+        // -------------------------------------
+
         if (myTerm != args.prevlogterm()) {
+            spdlog::warn("[Replication] Rejecting: Index {} Term Mismatch. Mine: {} Leader: {}", 
+                args.prevlogindex(), myTerm, args.prevlogterm());
             reply.set_term(currentTerm_);
             reply.set_success(false);
             return reply;
@@ -186,10 +236,12 @@ raft::AppendEntriesReply RaftNode::handleAppendEntries(const raft::AppendEntries
                 lastLogIndex_ = currentIndex - 1;
                 storage_->appendLog(entry);
                 lastLogIndex_ = currentIndex;
+                lastLogTerm_ = entry.term();
             }
         } else {
             storage_->appendLog(entry);
             lastLogIndex_ = currentIndex;
+            lastLogTerm_ = entry.term();
         }
     }
 

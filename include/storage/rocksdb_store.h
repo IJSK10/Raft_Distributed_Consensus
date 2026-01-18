@@ -70,6 +70,14 @@ public:
     // Used after taking a snapshot to free disk space.
     void compactLog(int compact_index);
 
+    int getLastAppliedIndex() {
+        std::string val;
+        if (db_->Get(rocksdb::ReadOptions(), "sys:lastApplied", &val).ok()) {
+            return std::stoi(val);
+        }
+        return 0;
+    }
+
 private:
     std::unique_ptr<rocksdb::DB> db_;
     std::mutex db_mutex_; // Thread safety for complex operations
