@@ -75,51 +75,54 @@ src/
 ├── rpc/          # Protobuf generated files and RPC handlers
 ├── storage/      # RocksDB wrapper, Log management, and Snapshotting
 └── utils/        # Logging (spdlog), configuration parsers, and globals
+```
 
-💻 Build & Run Instructions
-Prerequisites
-vcpkg (C++ Package Manager)
+## 💻 Build & Run Instructions
 
-CMake 3.10+
+### Prerequisites
+* **vcpkg** (C++ Package Manager)
+* **CMake** 3.10+
+* **C++17** Compiler
 
-C++17 Compiler
-
-1. Install Dependencies
-Ensure vcpkg is installed and install the required packages (gRPC, Protobuf, RocksDB, spdlog, etc.):
-
-Bash
+### 1. Install Dependencies
+Ensure `vcpkg` is installed and install the required packages (gRPC, Protobuf, RocksDB, spdlog, etc.):
+```bash
 ~/vcpkg/vcpkg install
-2. Build the Project
-Configure the project using the vcpkg toolchain and compile:
+```
 
-Bash
+### 2. Build the Project
+Configure the project using the vcpkg toolchain and compile:
+```bash
 # Configure
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
 # Build
 cmake --build build
-3. Run the Cluster
+```
+
+### 3. Run the Cluster
 Start the Raft cluster:
-
-Bash
+```bash
 ./build/raft_kv
-4. Interactive Menu
+```
+
+### 4. Interactive Menu
 Once the cluster starts, you will see an interactive menu to verify system behavior:
+1.  **Run CSV Workload:** Verifies correctness with a deterministic set of transactions.
+2.  **Run Benchmark:** Stress tests the system to measure throughput and latency.
+3.  **Run Fault Tolerance Test:** Automatically stops a node, generates load, restarts the node, and verifies Snapshot Recovery.
 
-Run CSV Workload: Verifies correctness with a deterministic set of transactions.
+---
 
-Run Benchmark: Stress tests the system to measure throughput and latency.
+## 🧪 Testing Scenarios Implemented
 
-Run Fault Tolerance Test: Automatically stops a node, generates load, restarts the node, and verifies Snapshot Recovery.
-
-🧪 Testing Scenarios Implemented
 The project includes a robust testing suite used to verify correctness:
 
-Leader Crash Test: Kills the Leader process mid-operation to verify a new Leader is elected and no data is lost.
+* **Leader Crash Test:** Kills the Leader process mid-operation to verify a new Leader is elected and no data is lost.
+* **Partition Test:** Isolates the Leader from the network to ensure split-brain scenarios are handled correctly.
+* **Snapshot Recovery Test:** Stops a follower for 500+ logs, restarts it, and verifies it catches up via Snapshot (not log replay).
 
-Partition Test: Isolates the Leader from the network to ensure split-brain scenarios are handled correctly.
+---
 
-Snapshot Recovery Test: Stops a follower for 500+ logs, restarts it, and verifies it catches up via Snapshot (not log replay).
-
-📜 License
+## 📜 License
 MIT License.
