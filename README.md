@@ -34,11 +34,11 @@ The system was stress-tested with **10,000 requests** (80% writes / 20% reads) o
 
 | Metric | Result |
 | :--- | :--- |
-| **Throughput** | **875.76 ops/sec** |
+| **Throughput** | **4531.34 ops/sec** |
 | **Requests** | 10,000 |
 | **Failed Requests** | 0 (100% Consistency) |
-| **Latency (P50)** | 51.22 ms |
-| **Latency (P99)** | 124.60 ms |
+| **Latency (P50)** | 9.13 ms |
+| **Latency (P99)** | 60.49 ms |
 
 ---
 
