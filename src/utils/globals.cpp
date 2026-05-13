@@ -8,3 +8,4 @@ bool DevFlags::LOG_EXECUTION   = true;
 bool DevFlags::LOG_NETWORK     = false;
 bool DevFlags::LOG_CLIENT      = false;
 bool DevFlags::LOG_SNAPSHOT    = true;
+bool DevFlags::LOG_STORAGE     = false;

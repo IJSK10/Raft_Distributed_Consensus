@@ -6,7 +6,7 @@
 
 void RaftNode::runReplicationManager() {
     while (running_) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         // Step 1: Get list of peers and check leadership (Quick Lock)
         std::vector<int> target_peers;

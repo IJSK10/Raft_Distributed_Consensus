@@ -8,4 +8,5 @@ struct DevFlags {
     static bool LOG_NETWORK;     // Raw bytes, connection errors
     static bool LOG_CLIENT;      // Client retries and responses
     static bool LOG_SNAPSHOT;    // Snapshot creation and installation
+    static bool LOG_STORAGE;     // RocksDB operations (Put/Get/Delete)
 };

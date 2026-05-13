@@ -34,7 +34,9 @@ RocksDBStore::RocksDBStore(const std::string& db_path) {
         last_log_index_cache_ = 0;
     }
     
-    spdlog::info("[Storage] DB Opened. Last Log Index: {}", last_log_index_cache_);
+    if (DevFlags::LOG_STORAGE) {
+        spdlog::info("[Storage] DB Opened. Last Log Index: {}", last_log_index_cache_);
+    }
 }
 
 RocksDBStore::~RocksDBStore() {
@@ -51,7 +53,10 @@ void RocksDBStore::initializeGenesisData() {
         return;
     }
 
-    spdlog::info("[Storage] Genesis: Creating 9000 accounts with Balance $100000...");
+    if (DevFlags::LOG_STORAGE)
+    {
+        spdlog::info("[Storage] Genesis: Creating 9000 accounts with Balance $100000...");
+    }
     
     rocksdb::WriteBatch batch;
     for (int i = 1; i <= 9000; ++i) {
@@ -59,7 +64,11 @@ void RocksDBStore::initializeGenesisData() {
     }
     
     db_->Write(rocksdb::WriteOptions(), &batch);
-    spdlog::info("[Storage] Genesis Complete.");
+
+    if (DevFlags::LOG_STORAGE)
+    {
+        spdlog::info("[Storage] Genesis Complete.");
+    }
 }
 
 // --- 2. RAFT HARD STATE ---
@@ -211,15 +220,23 @@ void RocksDBStore::applySnapshot(const std::string& snapshot_data, int last_inde
     batch.Put("sys:snapshotTerm", std::to_string(last_term));
     
     db_->Write(rocksdb::WriteOptions(), &batch);
+
+    if (DevFlags::LOG_STORAGE)
+    {
+        spdlog::info("[Storage] Snapshot Applied. State machine restored up to Index {}", last_index);
+    }
     
-    spdlog::info("[Storage] Snapshot Applied. State machine restored up to Index {}", last_index);
 }
 
 // C. Compact Log: Deletes OLD logs [0 ... compact_index]
 void RocksDBStore::compactLog(int compact_index) {
     std::lock_guard<std::mutex> lock(db_mutex_);
+
+    if (DevFlags::LOG_STORAGE)
+    {
+        spdlog::info("[Storage] Compacting Log up to index {}...", compact_index);
+    }
     
-    spdlog::info("[Storage] Compacting Log up to index {}...", compact_index);
     
     for (int i = 0; i <= compact_index; ++i) {
         db_->Delete(rocksdb::WriteOptions(), formatLogKey(i));

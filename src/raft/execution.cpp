@@ -77,12 +77,12 @@ void RaftNode::runStateMachineExecutor() {
                 }
             }
 
-            if (lastApplied_ % 100 == 0) {
+            if (lastApplied_ % 1000 == 0) {
                 
                 // SAFETY BUFFER: Keep the last 10 logs on disk.
                 // This allows followers who are slightly behind to catch up 
                 // without needing a full snapshot transfer.
-                int compact_index = lastApplied_ - 50;
+                int compact_index = lastApplied_ - 100;
 
                 if (compact_index > 0) {
                     if (DevFlags::LOG_SNAPSHOT) {

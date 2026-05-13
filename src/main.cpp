@@ -229,7 +229,8 @@ int main() {
     DevFlags::LOG_ELECTION = false;
     DevFlags::LOG_EXECUTION   = false;
     DevFlags::LOG_NETWORK     = false;
-    DevFlags::LOG_CLIENT      = true;
+    DevFlags::LOG_CLIENT      = false;
+    DevFlags::LOG_SNAPSHOT    = false;
 
     spdlog::info("--- STARTING RAFT CLUSTER ---");
 

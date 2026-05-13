@@ -86,10 +86,14 @@ void RaftClient::runCommand(client::ClientRequest req, ResultCallback callback) 
             if (resp.success()) {
                 success = true;
                 if (req.type() == client::ClientRequest::GET_BALANCE) {
-                         // Print: [Client 1] Account 5: Balance: 100
-                         spdlog::info("[Client {}] Account {}: {}", id_, req.sender_id(), resp.result());
+                    if (DevFlags::LOG_CLIENT) {
+                        // Print: [Client 1] Account 5: Balance: 100
+                        spdlog::info("[Client {}] Account {}: {}", id_, req.sender_id(), resp.result());
+                    }
                     } else {
-                         spdlog::info("[Client {}] Transfer: {}", id_, resp.result());
+                        if (DevFlags::LOG_CLIENT) {
+                            spdlog::info("[Client {}] Transfer: {}", id_, resp.result());
+                        }
                     }
                 break; // Success! Exit loop.
             }
